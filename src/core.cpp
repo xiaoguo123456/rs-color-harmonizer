@@ -9,10 +9,87 @@
 #include <stdexcept>
 #include <string_view>
 
+#ifdef RSCH_WITH_GDAL
+#include <gdal_priv.h>
+#include <ogr_spatialref.h>
+#include <cpl_conv.h>
+#include <cpl_string.h>
+#endif
+
 namespace rsch {
 namespace {
 
 [[noreturn]] void fail(const std::string& message) { throw std::runtime_error("rsch: " + message); }
+
+#ifdef RSCH_WITH_GDAL
+Raster readWithGdal(const std::filesystem::path& path) {
+    GDALAllRegister();
+    auto* dataset = static_cast<GDALDataset*>(GDALOpen(path.string().c_str(), GA_ReadOnly));
+    if (!dataset) return {};
+    const auto width = dataset->GetRasterXSize();
+    const auto height = dataset->GetRasterYSize();
+    const auto bands = dataset->GetRasterCount();
+    if (width <= 0 || height <= 0 || bands <= 0) { GDALClose(dataset); return {}; }
+    Raster result;
+    result.metadata.width = static_cast<std::uint32_t>(width);
+    result.metadata.height = static_cast<std::uint32_t>(height);
+    result.metadata.bands = static_cast<std::uint16_t>(bands);
+    const auto type = dataset->GetRasterBand(1)->GetRasterDataType();
+    result.metadata.pixel_type = type == GDT_Byte ? PixelType::UInt8 : type == GDT_UInt16 ? PixelType::UInt16 : PixelType::Float32;
+    double transform[6]{};
+    if (dataset->GetGeoTransform(transform) == CE_None) { std::copy(std::begin(transform), std::end(transform), result.metadata.geotransform.values.begin()); result.metadata.geotransform.valid = true; }
+    if (const char* projection = dataset->GetProjectionRef(); projection && *projection) result.metadata.projection = projection;
+    if (const char* software = dataset->GetMetadataItem("TIFFTAG_SOFTWARE"); software) result.metadata.software = software;
+    result.data.resize(static_cast<std::size_t>(width) * height * bands);
+    for (int band = 1; band <= bands; ++band) {
+        auto* rb = dataset->GetRasterBand(band);
+        int has_nodata = 0; const auto nodata = rb->GetNoDataValue(&has_nodata);
+        if (has_nodata && result.metadata.nodata.empty()) result.metadata.nodata = std::to_string(nodata);
+        std::vector<float> plane(static_cast<std::size_t>(width) * height);
+        if (rb->RasterIO(GF_Read, 0, 0, width, height, plane.data(), width, height, GDT_Float32, 0, 0, nullptr) != CE_None) { GDALClose(dataset); fail("GDAL RasterIO failed for " + path.string()); }
+        for (std::size_t i = 0; i < plane.size(); ++i) result.data[i * bands + (band - 1)] = plane[i];
+    }
+    GDALClose(dataset);
+    return result;
+}
+
+bool writeWithGdal(const Raster& raster, const std::filesystem::path& path, PixelType output_type, bool overwrite) {
+    GDALAllRegister();
+    if (!overwrite && std::filesystem::exists(path)) fail("output exists: " + path.string());
+    auto* driver = GetGDALDriverManager()->GetDriverByName("GTiff");
+    if (!driver) return false;
+    if (overwrite) VSIUnlink(path.string().c_str());
+    char** options = nullptr;
+    options = CSLSetNameValue(options, "TILED", "YES");
+    options = CSLSetNameValue(options, "COMPRESS", "DEFLATE");
+    const auto gdal_type = output_type == PixelType::UInt8 ? GDT_Byte : output_type == PixelType::UInt16 ? GDT_UInt16 : GDT_Float32;
+    auto* dataset = driver->Create(path.string().c_str(), raster.metadata.width, raster.metadata.height, raster.metadata.bands, gdal_type, options);
+    CSLDestroy(options);
+    if (!dataset) return false;
+    if (raster.metadata.geotransform.valid) dataset->SetGeoTransform(const_cast<double*>(raster.metadata.geotransform.values.data()));
+    if (!raster.metadata.projection.empty()) {
+        if (raster.metadata.projection.rfind("EPSG:", 0) == 0) {
+            try {
+                OGRSpatialReference srs;
+                srs.importFromEPSG(std::stoi(raster.metadata.projection.substr(5)));
+                char* wkt = nullptr;
+                if (srs.exportToWkt(&wkt) == OGRERR_NONE) { dataset->SetProjection(wkt); CPLFree(wkt); }
+            } catch (...) {}
+        } else dataset->SetProjection(raster.metadata.projection.c_str());
+    }
+    for (std::uint16_t band = 0; band < raster.metadata.bands; ++band) {
+        std::vector<float> plane(raster.pixelCount());
+        for (std::size_t i = 0; i < plane.size(); ++i) plane[i] = raster.data[i * raster.metadata.bands + band];
+        if (output_type == PixelType::UInt8) for (auto& value : plane) value = std::clamp(value, 0.0F, 255.0F);
+        else if (output_type == PixelType::UInt16) for (auto& value : plane) value = std::clamp(value, 0.0F, 65535.0F);
+        auto* rb = dataset->GetRasterBand(band + 1);
+        if (!raster.metadata.nodata.empty()) { try { rb->SetNoDataValue(std::stod(raster.metadata.nodata)); } catch (...) {} }
+        if (rb->RasterIO(GF_Write, 0, 0, raster.metadata.width, raster.metadata.height, plane.data(), raster.metadata.width, raster.metadata.height, GDT_Float32, 0, 0, nullptr) != CE_None) { GDALClose(dataset); fail("GDAL RasterIO failed writing " + path.string()); }
+    }
+    GDALClose(dataset);
+    return true;
+}
+#endif
 
 struct TiffReader {
     std::vector<std::uint8_t> bytes;
@@ -360,12 +437,25 @@ float Raster::at(std::uint32_t x, std::uint32_t y, std::uint16_t band) const {
     return data[(static_cast<std::size_t>(y) * metadata.width + x) * metadata.bands + band];
 }
 
-Raster readGeoTiff(const std::filesystem::path& path) { return decode(path); }
-RasterMetadata readGeoTiffMetadata(const std::filesystem::path& path) { return decode(path).metadata; }
-void writeGeoTiff(const Raster& raster, const std::filesystem::path& path, PixelType output_type, bool overwrite) { encode(raster, path, output_type, overwrite); }
+Raster readGeoTiff(const std::filesystem::path& path) {
+#ifdef RSCH_WITH_GDAL
+    if (auto raster = readWithGdal(path); raster.metadata.width != 0) return raster;
+#endif
+    return decode(path);
+}
+RasterMetadata readGeoTiffMetadata(const std::filesystem::path& path) { return readGeoTiff(path).metadata; }
+void writeGeoTiff(const Raster& raster, const std::filesystem::path& path, PixelType output_type, bool overwrite) {
+#ifdef RSCH_WITH_GDAL
+    if (writeWithGdal(raster, path, output_type, overwrite)) return;
+#endif
+    encode(raster, path, output_type, overwrite);
+}
 
 BlockStatistics computeBlockStatistics(const Raster& raster, std::uint32_t block_width, std::uint32_t block_height, std::optional<float> nodata) {
     if (block_width == 0 || block_height == 0) fail("block dimensions must be positive");
+    if (!nodata && !raster.metadata.nodata.empty()) {
+        try { nodata = std::stof(raster.metadata.nodata); } catch (...) { /* preserve all pixels if the metadata is non-numeric */ }
+    }
     BlockStatistics result; result.metadata = raster.metadata; result.block_width = block_width; result.block_height = block_height;
     result.bands.resize(raster.metadata.bands);
     std::vector<double> m2(raster.metadata.bands, 0.0);
