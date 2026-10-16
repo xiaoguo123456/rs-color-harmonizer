@@ -37,6 +37,9 @@ int main() {
     const auto stats = computeBlockStatistics(decoded, 5, 3);
     assert(stats.bands.size() == 3 && stats.bands[0].count == first.pixelCount());
     assert(stats.bands[0].minimum == 100 && stats.bands[0].maximum == 122);
+    auto nodata_raster = decoded;
+    nodata_raster.metadata.nodata = "100";
+    assert(computeBlockStatistics(nodata_raster).bands[0].count == first.pixelCount() - 1);
 
     Raster target = decoded;
     for (auto& x : target.data) x = x * 2.0F + 30.0F;
