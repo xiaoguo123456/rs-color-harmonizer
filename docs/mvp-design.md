@@ -1,13 +1,13 @@
-# MVP implementation notes
+# MVP 实现说明
 
-The executable path is intentionally usable on a clean C++20 machine. CMake probes GDAL, OpenCV and Qt 6, but none is required for the core library or CLI. This is useful for smoke tests and headless production runners; a deployment with GDAL can later replace `readGeoTiff` internals with true windowed/COG access without changing the public API.
+可执行路径以干净的 C++20 环境为目标。CMake 会探测 GDAL、OpenCV 和 Qt 6，但核心库和 CLI 不依赖它们；安装 GDAL 后，可在不改变公共 API 的情况下替换为真正的窗口化读取。
 
-## Processing flow
+## 处理流程
 
-1. Read each scene's dimensions, sample type, coordinate transform, projection, NoData and strip data.
-2. Traverse the raster in configurable blocks (default 256×256) and compute Welford mean/variance, ignoring NaN and optional NoData values.
-3. Choose the reference scene by minimum sum of per-band mean distances, or accept an explicit index.
-4. Apply per-band affine color transfer. `strength=0` is a no-op and `strength=1` matches reference mean and standard deviation.
-5. Export an uncompressed GeoTIFF with coordinate tags and provenance software text.
+1. 读取每景尺寸、采样类型、坐标变换、投影、NoData 和条带数据
+2. 按可配置分块（默认 256×256）遍历，使用 Welford 算法计算均值/方差，忽略 NaN 和 NoData
+3. 按各波段均值距离自动选择参考景，也可显式指定索引
+4. 执行逐波段仿射颜色迁移；`strength=0` 为不处理，`strength=1` 匹配参考景均值和标准差
+5. 导出带坐标标签和软件来源信息的无压缩 GeoTIFF
 
-The current fallback deliberately rejects compression and planar-separated TIFFs with a clear error. This avoids silently decoding a file incorrectly. GDAL windowed I/O, cloud masks, overlap-only statistics, seamlines and COG tiling remain production-phase extensions.
+当前无依赖 TIFF 读写器会明确拒绝压缩 TIFF 和平面分离 TIFF，避免静默读错。GDAL 窗口化 I/O、云掩膜、仅重叠区统计、接缝线和 COG 分块属于后续生产阶段。
