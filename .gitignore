@@ -1,0 +1,12 @@
+build/
+build-*/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+*.tif
+*.tiff
+.DS_Store
+.vscode/
+.idea/
