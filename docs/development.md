@@ -1,8 +1,8 @@
-# Development Conventions
+# 开发规范
 
-- C++20, clang-format, clang-tidy and unit tests for processing kernels
-- QML files use one component per file and explicit property names
-- No raw GDAL pointers outside RAII wrappers
-- All long-running work runs off the UI thread
-- Every algorithm has synthetic tests and at least one real-scene regression case
-- Keep third-party licenses and data-source terms in `THIRD_PARTY_NOTICES.md`
+- 使用 C++20、clang-format、clang-tidy，并为核心处理算法编写单元测试。
+- QML 文件按组件拆分，每个属性使用明确名称。
+- GDAL 和其他原生资源必须使用 RAII 管理，禁止裸指针跨层传递。
+- 所有耗时任务必须运行在 UI 线程之外。
+- 每个算法都要有合成数据测试和至少一个真实影像回归用例。
+- 发布前在 THIRD_PARTY_NOTICES.md 中记录第三方许可证和数据来源条款。
