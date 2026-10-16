@@ -1,0 +1,21 @@
+name: C++ 与 Landsat 回归测试
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 配置与构建
+        run: cmake -S . -B build -DRSCH_BUILD_QT=OFF -DRSCH_USE_GDAL=OFF -DRSCH_USE_OPENCV=OFF
+      - name: 编译
+        run: cmake --build build --parallel
+      - name: CTest
+        run: ctest --test-dir build --output-on-failure
+      - name: Landsat 合成多景回归
+        run: |
+          python3 tests/landsat_multiscene_regression.py --generate /tmp/rsch-landsat-fixture
+          python3 tests/landsat_multiscene_regression.py --run /tmp/rsch-landsat-fixture
