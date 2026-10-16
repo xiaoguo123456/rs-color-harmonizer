@@ -26,3 +26,16 @@
 4. 记录场景 ID、资产链接、窗口、QA 位掩膜、缩放参数、校验和与软件版本，再比较 MAE、RMSE、均值/标准差比和接缝跳变
 
 USGS 资产可能重定向到登录，AWS 镜像是 requester-pays，因此仓库只提供合成夹具和元数据查询，不存放真实 COG 或凭据，避免大文件和意外费用。
+
+## 已验证的真实 Landsat 样例
+
+为了做离线、可复现的真实数据回归，本项目还使用了欧盟 JRC IMPACT Toolbox 提供的 Brazil Landsat 样例：
+<https://forobs.jrc.ec.europa.eu/IMPACT/images>
+
+下载包 `Landsat_test_data_1990_2000_2014_Brazil.zip` 约 27 MB，包含三景完整 GeoTIFF：
+
+- `tm_226-068_02081990_calrefbyt.tif`
+- `tm_226-068_28072000_calrefbyt.tif`
+- `oli_226-068_03072014_calrefbyt.tif`
+
+三景均为 1557×1603 像元、EPSG:32621。本次测试用 GDAL 从每景选取 B3/B2/B1 生成无压缩 RGB GeoTIFF，再用 `rsch harmonize` 以 2000 年景为参考处理 1990 年和 2014 年景。完整整景前后截图和统计结果已在开发记录中验证。
