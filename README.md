@@ -1,28 +1,39 @@
 # RS Color Harmonizer
 
-遥感影像多景匀光匀色与镶嵌生产桌面软件。
+单机 MVP：面向同一传感器、相近时相 GeoTIFF 场景的分块统计、参考影像选择、均值/方差颜色迁移、简单匀光和 GeoTIFF 导出。核心库是 C++20，命令行工具在没有 Qt/GDAL/OpenCV 开发包时也可以构建。
 
-## 项目目标
+## 快速构建
 
-面向卫星、无人机和测绘生产场景，提供多景影像的参考色彩匹配、自动匀光匀色、接缝线优化、镶嵌和质量检查能力。首版限定同一传感器、同一区域、相近时间的 GeoTIFF/COG 数据。
+```bash
+cmake -S . -B build -DRSCH_BUILD_QT=OFF
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+```
 
-## 首版 MVP
+若机器没有 CMake，可用以下最小编译命令验证核心：
 
-- GeoTIFF/COG 导入与元数据识别
-- 多景影像浏览、图层管理和透明度控制
-- 自动选择参考影像
-- 重叠区统计匹配和颜色迁移
-- 接缝线生成与羽化
-- 前后对比和局部人工修正
-- 分块批处理、进度、暂停、取消和日志
-- 输出带坐标和元数据的 GeoTIFF/COG
+```bash
+g++ -std=c++20 -Iinclude src/core.cpp tests/test_core.cpp -o /tmp/rsch_core_tests
+/tmp/rsch_core_tests
+g++ -std=c++20 -Iinclude src/core.cpp apps/rsch.cpp -o /tmp/rsch
+```
 
-## 技术方向
+## CLI
 
-- 桌面端：Qt 6 + Qt Quick/QML
-- 核心：C++20
-- 影像：GDAL + OpenCV + Eigen
-- 并行：TBB/OpenMP
-- 算法验证：Python 独立目录，不进入正式运行时
+```text
+rsch inspect scene.tif
+rsch stats scene.tif --block 512x512
+rsch match target.tif reference.tif matched.tif --strength 0.8 --type uint16
+rsch equalize scene.tif equalized.tif --strength 0.5
+rsch harmonize out/ scene_a.tif scene_b.tif --reference 0
+```
 
-详细设计见 docs/。
+核心内置了无第三方依赖的 baseline TIFF/GeoTIFF 读写器，支持 little/big endian、无压缩 strip、8/16 位整数、32 位浮点、灰度/RGB、NoData、ModelPixelScale/ModelTiepoint 和常见 EPSG GeoKey。生产数据若含压缩、分块或复杂 CRS，建议启用 GDAL（`-DRSCH_USE_GDAL=ON`）并在后续版本切换为 GDAL 的窗口读取路径。当前实现会拒绝压缩/平面分离 TIFF，并明确报告原因。
+
+Qt Quick 界面位于 `qml/Main.qml`，默认关闭；安装 Qt 6 后使用 `-DRSCH_BUILD_QT=ON` 构建。界面提供场景列表、参考影像、迁移强度和导出流程骨架，核心算法仍可独立运行。
+
+## 算法边界
+
+MVP 的颜色迁移按波段统计量执行：`y = (x - mean_target) * (std_reference / std_target) + mean_reference`，`strength` 可在 0 与 1 之间混合。`equalizeLighting` 使用分块遍历的稳健全局亮度偏移。云、阴影、积雪和变化地物尚未自动检测，应在生产运行前提供掩膜；接缝线和羽化会在后续阶段接入。
+
+核心测试生成小型合成 GeoTIFF，验证元数据、坐标、分块统计、颜色迁移和多场景参考流程，不下载 Landsat 数据。真实 Landsat 回归数据建议在本地按数据许可准备，并通过 `rsch stats` 对比基线统计。
