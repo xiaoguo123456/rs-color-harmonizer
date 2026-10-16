@@ -1,16 +1,16 @@
-# Architecture
+# 技术架构
 
-## Layers
+## 分层设计
 
-1. UI layer: Qt Quick/QML. Handles ribbon, dock panels, layer tree, map canvas, comparison views and parameter forms.
-2. Application layer: C++ services for project files, task scheduling, command history, progress and cancellation.
-3. Processing layer: C++ algorithms for radiometric normalization, overlap statistics, color transfer, seamline and feathering.
-4. Data layer: GDAL for GeoTIFF/COG/JP2, CRS, reprojection, resampling, NoData and block I/O.
-5. Parallel layer: TBB/OpenMP first; CUDA only for measured hotspots.
+1. 界面层：Qt Quick/QML，负责 Ribbon、停靠面板、图层树、地图画布、对比视图和参数表单。
+2. 应用层：C++ 服务，负责工程文件、任务调度、命令历史、进度和取消。
+3. 处理层：C++ 算法，负责辐射归一化、重叠区统计、颜色迁移、接缝线和羽化。
+4. 数据层：GDAL，负责 GeoTIFF/COG/JP2、坐标系、重投影、重采样、NoData 和分块读写。
+5. 并行层：先使用 TBB/OpenMP；只有基准测试证明必要时再接 CUDA。
 
-## Constraints
+## 约束
 
-- Block/window processing only. Never load a full large scene by default.
-- Preserve CRS, geotransform, NoData, band descriptions and source provenance.
-- Every output records input checksums, parameters, software version and processing time.
-- Treat cloud, shadow, snow and changed land cover as masks, not color statistics.
+- 只按窗口和数据块处理，默认不把整景大影像一次性读入内存。
+- 保留 CRS、地理变换、NoData、波段描述和数据来源信息。
+- 每个输出记录输入校验值、参数、软件版本和处理时间。
+- 云、阴影、积雪和地物变化区域应作为掩膜处理，不能直接参与色彩统计。
