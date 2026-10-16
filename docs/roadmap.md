@@ -1,25 +1,25 @@
-# Roadmap
+# 开发路线图
 
-## Phase 0: benchmark
+## 阶段 0：基准测试
 
-- Select representative scenes and define quality metrics
-- Measure I/O, statistics, color transform, seamline and export time
-- Establish target throughput and peak memory
+- 选择代表性影像和质量评价指标
+- 测量读写、统计、颜色变换、接缝线和导出耗时
+- 建立目标吞吐量和峰值内存指标
 
-## Phase 1: desktop MVP
+## 阶段 1：桌面 MVP
 
-- Project and layer management
-- Single-sensor multi-scene harmonization
-- Preview, manual correction and GeoTIFF/COG export
+- 工程和图层管理
+- 单一传感器多景匀色
+- 预览、人工修正和 GeoTIFF/COG 导出
 
-## Phase 2: production
+## 阶段 2：生产化
 
-- Batch jobs and resumable processing
-- Cloud optimized outputs and STAC metadata
-- Quality reports and reproducible processing records
+- 批处理和可恢复任务
+- 云优化输出和 STAC 元数据
+- 质量报告和可复现处理记录
 
-## Phase 3: intelligent assistance
+## 阶段 3：智能辅助
 
-- Cloud/shadow and land-cover masks
-- Region-specific reference selection
-- Optional learned color harmonization
+- 云/阴影和地物覆盖掩膜
+- 面向区域的参考影像选择
+- 可选的学习型颜色匀化
